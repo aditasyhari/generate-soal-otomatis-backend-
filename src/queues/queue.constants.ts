@@ -1,0 +1,10 @@
+export const QUEUE_DOCUMENTS = "documents";
+export const QUEUE_INDEXING = "indexing";
+export const QUEUE_GENERATION = "generation";
+
+export const JOB_DOCUMENT_PARSE = "DOCUMENT_PARSE";
+export const JOB_DOCUMENT_CHUNK = "DOCUMENT_CHUNK";
+export const JOB_CHUNK_EMBED_AND_INDEX = "CHUNK_EMBED_AND_INDEX";
+
+export const JOB_QUESTION_GENERATE_ITEM = "QUESTION_GENERATE_ITEM";
+export const JOB_QUESTION_GENERATE_BATCH = "QUESTION_GENERATE_BATCH";

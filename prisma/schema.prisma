@@ -1,0 +1,183 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PARSING
+  PARSED
+  INDEXING
+  INDEXED
+  FAILED
+}
+
+enum QuestionType {
+  MCQ
+  ESSAY
+}
+
+enum CognitiveLevel {
+  LOTS
+  MOTS
+  HOTS
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum RunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model Document {
+  id           String         @id @default(cuid())
+  title        String
+  subject      String?
+  grade        String?
+  language     String         @default("id")
+  fileUrl      String
+  fileType     String         // "pdf" | "docx"
+  status       DocumentStatus @default(UPLOADED)
+  qualityScore Int            @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pages  DocumentPage[]
+  chunks Chunk[]
+  blueprints Blueprint[]
+}
+
+model DocumentPage {
+  id          String   @id @default(cuid())
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  pageNo      Int
+  rawText     String?
+  cleanedText String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([documentId, pageNo])
+  @@index([documentId])
+}
+
+model Chunk {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  chunkText  String
+  tokenCount Int      @default(0)
+  metadata   Json     // { pageStart, pageEnd, bab, subbab, ... }
+
+  // Untuk sekarang simpan embedding di JSON dulu (simpel).
+  // Nanti kalau mau pgvector, kita tambah kolom vector + backfill.
+  embedding  Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([documentId])
+}
+
+model Blueprint {
+  id          String   @id @default(cuid())
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  title       String
+  config      Json     // simpan config original (total, distribusi, dll)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items       BlueprintItem[]
+  runs        GenerationRun[]
+
+  @@index([documentId])
+}
+
+model BlueprintItem {
+  id            String         @id @default(cuid())
+  blueprintId   String
+  blueprint     Blueprint      @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+
+  no            Int
+  type          QuestionType
+  cognitive     CognitiveLevel
+  difficulty    Difficulty
+
+  // query/tujuan (MVP: boleh kosong / auto)
+  objective     String?
+  // sumber chunk yang dipakai (MVP: kita pilih deterministik)
+  sourceChunkIds Json?
+
+  createdAt     DateTime @default(now())
+
+  questions     Question[]
+
+  @@unique([blueprintId, no])
+  @@index([blueprintId])
+}
+
+model GenerationRun {
+  id           String    @id @default(cuid())
+  blueprintId  String
+  blueprint    Blueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+
+  status       RunStatus @default(QUEUED)
+  totalItems   Int       @default(0)
+  doneItems    Int       @default(0)
+  failedItems  Int       @default(0)
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  questions    Question[]
+
+  @@index([blueprintId])
+}
+
+model Question {
+  id            String         @id @default(cuid())
+  runId         String
+  run           GenerationRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  blueprintItemId String
+  blueprintItem   BlueprintItem @relation(fields: [blueprintItemId], references: [id], onDelete: Cascade)
+
+  type          QuestionType
+  cognitive     CognitiveLevel
+  difficulty    Difficulty
+
+  // konten soal
+  stem          String
+  options       Json?          // untuk MCQ: ["A..","B..",...]
+  answerKey     String?        // untuk MCQ: "A"/"B"/...
+  explanation   String         // pembahasan
+
+  // khusus essay
+  expectedAnswer Json?         // { ringkas: "...", panjang?: "..." }
+  keywordGroups  Json?         // [{concept, must_have_one_of:[...]}]
+  rubric         Json?         // [{aspect, points}]
+
+  // traceability
+  sourceChunkIds Json?
+
+  createdAt     DateTime @default(now())
+
+  @@unique([runId, blueprintItemId])
+
+  @@index([runId])
+  @@index([blueprintItemId])
+}
